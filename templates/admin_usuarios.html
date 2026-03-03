@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios - IAME</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>body { background-color: #f8f9fa; }</style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand">IAME QR Access - Usuarios</span>
+            <div class="d-flex">
+                <a href="{{ url_for('admin_home') }}" class="btn btn-outline-light me-2">Volver al Panel</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body bg-light">
+                        <h5 class="card-title">Crear Nuevo Operario</h5>
+                        <form action="{{ url_for('admin_usuarios_crear') }}" method="POST">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre de Usuario</label>
+                                <input type="text" name="username" class="form-control" placeholder="Ej: nafta_puesto1" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Contraseña</label>
+                                <input type="password" name="password" class="form-control" placeholder="****" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Rol / Permiso</label>
+                                <select name="role" class="form-select" required>
+                                    {% for r in roles %}
+                                        <option value="{{ r }}">{{ r | upper }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Crear Usuario</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Usuarios Activos</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Usuario</th>
+                                        <th>Rol</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for u in usuarios %}
+                                    <tr>
+                                        <td><strong>{{ u.username }}</strong></td>
+                                        <td><span class="badge bg-secondary">{{ u.role | upper }}</span></td>
+                                        <td>
+                                            {% if u.username != current_user.username %}
+                                                <a href="{{ url_for('admin_usuarios_borrar', id=u.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Seguro quieres borrarlo?')">Eliminar</a>
+                                            {% else %}
+                                                <span class="text-muted small">Tu sesión</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
