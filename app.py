@@ -1,40 +1,84 @@
 import os
 import qrcode
-import pandas as pd
 from io import BytesIO
-from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, send_file, jsonify, flash, session
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-
-# Importación de modelos (aseguráte que tu archivo se llame models.py)
 from models import db, User, Stock, Piloto, Movimiento
 
 app = Flask(__name__)
-
-# --- CONFIGURACIÓN ---
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'iame_super_secreto_local')
-DOMINIO_REAL = os.environ.get('DOMINIO_REAL', '127.0.0.1:5000')
-
-# Configuración de Base de Datos (Render MySQL vs Local SQLite)
-if os.environ.get("DB_HOST"):
-    DB_USER = os.environ.get("DB_USER")
-    DB_PASS = os.environ.get("DB_PASS")
-    DB_HOST = os.environ.get("DB_HOST")
-    DB_NAME = os.environ.get("DB_NAME")
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 280, 'pool_pre_ping': True, 'pool_size': 10}
-else:
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'iame_local.db')
-
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'iame_ultra_secret_2026')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
 
-# --- INICIALIZACIÓN DE EXTENSIONES ---
+# Configuración para Render (MySQL) o Local (SQLite)
+if os.environ.get("DB_HOST"):
+    uri = f"mysql+pymysql://{os.environ.get('DB_USER')}:{os.environ.get('DB_PASS')}@{os.environ.get('DB_HOST')}/{os.environ.get('DB_NAME')}"
+    app.config['SQLALCHEMY_DATABASE_URI'] = uri
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///iame_test.db'
+
 db.init_app(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
-login_manager = LoginManager()
+@login_manager.user_loader
+def load_user(uid):
+    return User.query.get(int(uid))
+
+# --- RUTAS PRINCIPALES ---
+@app.route('/')
+def index():
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = User.query.filter_by(username=request.form['username']).first()
+        if user and check_password_hash(user.password, request.form['password']):
+            login_user(user)
+            return redirect(url_for('admin_home' if user.role == 'admin' else 'puesto_control'))
+        flash('Credenciales incorrectas', 'danger')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# --- PANEL OPERARIO (PUESTO DE CONTROL) ---
+@app.route('/puesto')
+@login_required
+def puesto_control():
+    return render_template('puesto_control.html')
+
+@app.route('/perfil/<int:n_kart>')
+@login_required
+def ver_perfil(n_kart):
+    p = Piloto.query.get_or_404(n_kart)
+    return render_template('puesto_control_perfil.html', p=p)
+
+@app.route('/generar_qr/<int:n_kart>')
+def generar_qr(n_kart):
+    # Usamos DOMINIO_REAL de las variables de entorno de Render
+    dominio = os.environ.get('DOMINIO_REAL', 'localhost:5000')
+    img = qrcode.make(f"https://{dominio}/perfil/{n_kart}")
+    buf = BytesIO()
+    img.save(buf)
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
+
+# --- INICIALIZACIÓN MÁGICA ---
+with app.app_context():
+    db.create_all()
+    # Crear admin por defecto si no existe
+    if not User.query.filter_by(username='admin').first():
+        pw = generate_password_hash('iame2026')
+        new_admin = User(username='admin', password=pw, role='admin')
+        db.session.add(new_admin)
+        db.session.commit()
+
+if __name__ == '__main__':
+    app.run(debug=True)login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
