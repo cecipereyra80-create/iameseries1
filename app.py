@@ -294,20 +294,51 @@ def api_descontar_post(id, item):
 @login_required
 def admin_exportar():
     if current_user.role != 'admin': return "Acceso Denegado", 403
+    
+    # 1. Preparar la hoja de Saldos (Resumen de Pilotos)
     pilotos = Piloto.query.all()
-    data = []
+    data_saldos = []
     for p in pilotos:
-        data.append({
+        data_saldos.append({
             'N_Kart': p.numero_piloto, 'Nombre': p.nombre, 'DNI': p.dni, 'Equipo': p.equipo,
             'Nafta': p.nafta_20l, 'MG_Rojas': p.neumaticos_mg_rojas, 'MG_Cadete': p.neumaticos_mg_cadete,
             'Lluvia': p.neumaticos_lluvia, 'Sensor': p.sensor, 'Pista': p.derecho_pista
         })
-    df = pd.DataFrame(data)
+    df_saldos = pd.DataFrame(data_saldos)
+
+    # 2. Preparar la hoja de Movimientos (Auditoría)
+    # Ordenamos por fecha descendente (los más nuevos primero)
+    movimientos = Movimiento.query.order_by(Movimiento.fecha.desc()).all()
+    data_movs = []
+    for m in movimientos:
+        data_movs.append({
+            'Fecha': m.fecha.strftime('%d/%m/%Y %H:%M:%S') if m.fecha else '',
+            'Tipo de Acción': m.tipo,
+            'Usuario (Operario)': m.usuario,
+            'Item': ITEMS_CONFIG.get(m.item, m.item), # Muestra el nombre lindo si existe
+            'Cantidad': m.cantidad,
+            'DNI Piloto': m.piloto_dni or 'N/A',
+            'Detalle Extra': m.detalle or ''
+        })
+    df_movs = pd.DataFrame(data_movs)
+
+    # 3. Generar el archivo Excel con múltiples hojas
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Saldos IAME')
+        # Guardar la hoja 1
+        df_saldos.to_excel(writer, index=False, sheet_name='Saldos IAME')
+        
+        # Guardar la hoja 2 (si no hay movimientos, creamos una vacía con los títulos)
+        if not df_movs.empty:
+            df_movs.to_excel(writer, index=False, sheet_name='Auditoría Movimientos')
+        else:
+            pd.DataFrame(columns=['Fecha', 'Tipo de Acción', 'Usuario (Operario)', 'Item', 'Cantidad', 'DNI Piloto', 'Detalle Extra']).to_excel(writer, index=False, sheet_name='Auditoría Movimientos')
+            
     output.seek(0)
-    return send_file(output, download_name=f"reporte_iame_{datetime.now().strftime('%Y%m%d')}.xlsx", as_attachment=True)
+    
+    # Descargar con la fecha de hoy en el nombre del archivo
+    nombre_archivo = f"reporte_iame_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return send_file(output, download_name=nombre_archivo, as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
