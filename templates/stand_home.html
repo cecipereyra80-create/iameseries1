@@ -3,25 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Puesto de Control - IAME</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #1a1a1a; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { background-color: #2d2d2d; border: none; border-radius: 15px; padding: 30px; text-align: center; max-width: 400px; width: 90%; }
-        .status-icon { font-size: 3rem; color: #ffc107; margin-bottom: 15px; }
-    </style>
+    <title>Panel Admin - IAME Series</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="card shadow-lg border-top border-warning">
-        <div class="status-icon">📡</div>
-        <h3 class="text-warning mb-3">Sesión Activa</h3>
-        <p class="lead">Puesto: <strong>{{ current_user.role | upper }}</strong></p>
-        <hr class="border-secondary">
-        <p class="text-light">El sistema está listo para procesar retiros.</p>
-        <div class="alert alert-dark small">
-            <strong>Instrucción:</strong> No cierres esta pestaña. Abre la <strong>Cámara</strong> de tu celular y escanea el QR del kart para entregar ítems.
+    <div class="top-bar">
+        <div class="event-title">IAME SERIES - CONTROL DE PIT LANE</div>
+        <div>
+            <span style="margin-right: 15px;">Admin: <strong>{{ current_user.username }}</strong></span>
+            <a href="{{ url_for('logout') }}" class="btn-logout" style="padding: 5px 10px; text-decoration: none; border-radius: 4px;">SALIR</a>
         </div>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm mt-3">Cerrar Sesión</a>
+    </div>
+
+    <div class="container">
+        <h1>Panel de Administración</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="pill pill-{{ 'green' if category == 'success' else 'red' }}" style="margin-bottom: 20px; padding: 10px;">
+                {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="card">
+            <h3>Registrar Nuevo Piloto / Kart</h3>
+            <form action="{{ url_for('admin_crear') }}" method="POST" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end;">
+                <div>
+                    <label>N° KART</label>
+                    <input type="number" name="numero_piloto" placeholder="Ej: 125" required>
+                </div>
+                <div>
+                    <label>NOMBRE PILOTO</label>
+                    <input type="text" name="nombre" placeholder="Nombre Apellido" required>
+                </div>
+                <div>
+                    <label>EQUIPO / CHASIS</label>
+                    <input type="text" name="equipo" placeholder="Ej: Tony Kart">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-red">REGISTRAR</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Lista de Inscriptos</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N° KART</th>
+                            <th>PILOTO</th>
+                            <th>EQUIPO</th>
+                            <th>ESTADO PISTA</th>
+                            <th>ACCIONES / QR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pilotos %}
+                        <tr>
+                            <td style="font-weight: 900; color: var(--primary-blue); font-size: 1.2em;">#{{ p.numero_piloto }}</td>
+                            <td>{{ p.nombre }}</td>
+                            <td>{{ p.equipo }}</td>
+                            <td>
+                                <span class="pill {{ 'pill-green' if p.derecho_pista == 'Pagado' else 'btn-orange' }}" style="padding: 4px 8px;">
+                                    {{ p.derecho_pista }}
+                                </span>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 5px;">
+                                    <a href="{{ url_for('ver_perfil', n_kart=p.numero_piloto) }}" class="btn btn-blue" style="padding: 8px; font-size: 0.8em; margin: 0;">GESTIONAR</a>
+                                    <a href="{{ url_for('generar_qr', n_kart=p.numero_piloto) }}" target="_blank" class="btn btn-orange" style="padding: 8px; font-size: 0.8em; margin: 0;">VER QR</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5">No hay pilotos registrados aún.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </body>
 </html>
