@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - IAME</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .qr-thumb { width: 50px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand">IAME QR Access - Admin</span>
+            <div class="d-flex">
+                <a href="{{ url_for('admin_stock') }}" class="btn btn-outline-light me-2">Gestionar Stock</a>
+                <a href="{{ url_for('logout') }}" class="btn btn-danger">Salir</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="row mb-4">
+            <div class="col-md-7">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Registrar Nuevo Piloto</h5>
+                        <form action="{{ url_for('admin_crear') }}" method="POST" class="row g-2">
+                            <div class="col-md-3">
+                                <input type="number" name="numero" class="form-control" placeholder="N° Kart" required>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" name="nombre" class="form-control" placeholder="Nombre Completo" required>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" name="dni" class="form-control" placeholder="DNI" required>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <input type="text" name="equipo" class="form-control" placeholder="Equipo (Opcional)">
+                            </div>
+                            <div class="col-12 mt-2">
+                                <button type="submit" class="btn btn-primary w-100">Agregar Piloto</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-5">
+                <div class="card h-100">
+                    <div class="card-body bg-light">
+                        <h5 class="card-title">Importar desde Excel (.xlsx)</h5>
+                        <p class="text-muted small mb-2">Columnas necesarias: N_Kart, Nombre, DNI, Equipo</p>
+                        <form action="{{ url_for('admin_importar') }}" method="POST" enctype="multipart/form-data">
+                            <input class="form-control mb-2" type="file" name="archivo_excel" accept=".xlsx" required>
+                            <button type="submit" class="btn btn-success w-100">Subir y Procesar</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listado de Pilotos</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Nombre</th>
+                                <th>DNI</th>
+                                <th>QR</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in pilotos %}
+                            <tr>
+                                <td><strong>{{ p.numero_piloto }}</strong></td>
+                                <td>{{ p.nombre }}</td>
+                                <td>{{ p.dni }}</td>
+                                <td>
+                                    <a href="{{ url_for('get_qr', id=p.id) }}" target="_blank">
+                                        <img src="{{ url_for('get_qr', id=p.id) }}" class="qr-thumb" alt="Ver QR">
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('admin_procesar_carga', id=p.id) }}" class="btn btn-sm btn-success">Cargar Saldo</a>
+                                    
+                                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal{{ p.id }}">Editar</button>
+                                    
+                                    <a href="{{ url_for('admin_borrar', id=p.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Seguro quieres borrarlo? El QR se perderá.')">Borrar</a>
+                                </td>
+                            </tr>
+
+                            <div class="modal fade" id="editModal{{ p.id }}" tabindex="-1" aria-labelledby="editModalLabel{{ p.id }}" aria-hidden="true">
+                              <div class="modal-dialog">
+                                <div class="modal-content">
+                                  <div class="modal-header bg-dark text-white">
+                                    <h5 class="modal-title" id="editModalLabel{{ p.id }}">Editar Piloto</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                  </div>
+                                  <form action="{{ url_for('admin_editar', id=p.id) }}" method="POST">
+                                      <div class="modal-body">
+                                          <div class="mb-3">
+                                              <label class="form-label">N° Kart</label>
+                                              <input type="number" name="numero" class="form-control" value="{{ p.numero_piloto }}" required>
+                                          </div>
+                                          <div class="mb-3">
+                                              <label class="form-label">Nombre Completo</label>
+                                              <input type="text" name="nombre" class="form-control" value="{{ p.nombre }}" required>
+                                          </div>
+                                          <div class="mb-3">
+                                              <label class="form-label">DNI</label>
+                                              <input type="text" name="dni" class="form-control" value="{{ p.dni }}" required>
+                                          </div>
+                                          <div class="mb-3">
+                                              <label class="form-label">Equipo</label>
+                                              <input type="text" name="equipo" class="form-control" value="{{ p.equipo }}">
+                                          </div>
+                                      </div>
+                                      <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                                      </div>
+                                  </form>
+                                </div>
+                              </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center">
+            <a href="{{ url_for('admin_exportar') }}" class="btn btn-secondary">Descargar Reporte Excel</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

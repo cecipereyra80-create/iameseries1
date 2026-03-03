@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cargar/Editar Saldo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Racing+Sans+One&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #15151e; color: #fff; font-family: 'Roboto', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #1e1e28; padding: 30px; border-radius: 8px; border-top: 5px solid #e10600; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { font-family: 'Racing Sans One', cursive; color: #fff; text-transform: uppercase; letter-spacing: 1px; margin-top: 0; }
+        a.back-btn { display: inline-block; color: #aaa; text-decoration: none; margin-bottom: 20px; font-size: 14px; text-transform: uppercase; font-weight: bold; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; background-color: #2a2a36; padding: 15px; margin-bottom: 10px; border-radius: 6px; }
+        .item-info strong { display: block; font-size: 18px; margin-bottom: 5px; color: #e10600; }
+        .item-info span { font-size: 14px; color: #aaa; }
+        input[type="number"], input[type="text"] { width: 80px; padding: 10px; background-color: #15151e; border: 1px solid #444; color: white; border-radius: 4px; font-size: 16px; text-align: center; }
+        input[type="text"] { width: 100%; text-align: left; }
+        .radio-box { background-color: #2a2a36; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #444; }
+        button { width: 100%; padding: 15px; background-color: #e10600; color: white; border: none; font-weight: bold; text-transform: uppercase; border-radius: 4px; cursor: pointer; transition: 0.3s; margin-top: 20px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('admin_home') }}" class="back-btn">← Volver al Pit Lane</a>
+        <h2>Gestión de Saldo: {{ p.nombre }}</h2>
+        <p style="color: #aaa; margin-top: -10px; margin-bottom: 20px;">Kart Nº <strong>{{ p.numero_piloto }}</strong></p>
+        
+        <form method="POST">
+            <div class="radio-box">
+                <strong style="color: #e10600; display: block; margin-bottom: 10px;">¿Qué acción deseas realizar?</strong>
+                <label style="margin-right: 15px; cursor: pointer;">
+                    <input type="radio" name="modo" value="sumar" checked> ➕ Sumar
+                </label>
+                <label style="margin-right: 15px; cursor: pointer;">
+                    <input type="radio" name="modo" value="restar"> ➖ Restar (Descontar)
+                </label>
+                <label style="cursor: pointer;">
+                    <input type="radio" name="modo" value="fijar"> ✏️ Fijar Exacto
+                </label>
+            </div>
+
+            {% for key, name in items.items() %}
+                <div class="item-row">
+                    <div class="item-info">
+                        <strong>{{ name }}</strong>
+                        <span>Saldo actual: {{ getattr(p, key) }} | Consumido: {{ consumos[key] }}</span>
+                    </div>
+                    <div>
+                        <input type="number" name="{{ key }}" value="" placeholder="0" min="1">
+                    </div>
+                </div>
+            {% endfor %}
+            
+            <div style="margin-top: 20px;">
+                <strong style="color: #e10600; display: block; margin-bottom: 10px;">Derecho a pista:</strong>
+                <input type="text" name="derecho_pista" value="{{ p.derecho_pista }}">
+            </div>
+            
+            <button type="submit">Ejecutar Cambios</button>
+        </form>
+    </div>
+</body>
+</html>

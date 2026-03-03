@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gestión de Stock</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Racing+Sans+One&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #15151e; color: #fff; font-family: 'Roboto', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background-color: #1e1e28; padding: 30px; border-radius: 8px; border-top: 5px solid #e10600; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { font-family: 'Racing Sans One', cursive; color: #fff; text-transform: uppercase; margin-top: 0; }
+        a.back-btn { display: inline-block; color: #aaa; text-decoration: none; margin-bottom: 20px; text-transform: uppercase; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background-color: #15151e; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #333; }
+        th { background-color: #e10600; color: white; text-transform: uppercase; font-family: 'Racing Sans One', cursive; }
+        .stock-number { font-size: 22px; font-weight: bold; color: #fff; }
+        input[type="number"] { width: 80px; padding: 8px; background-color: #1e1e28; border: 1px solid #444; color: white; border-radius: 4px; margin-right: 10px; }
+        button { padding: 8px 12px; border: none; font-weight: bold; text-transform: uppercase; border-radius: 4px; cursor: pointer; transition: 0.3s; font-size: 12px; margin-left: 5px;}
+        .btn-sumar { background-color: #4CAF50; color: white; }
+        .btn-restar { background-color: #f44336; color: white; }
+        .btn-fijar { background-color: #ff9800; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('admin_home') }}" class="back-btn">← Volver al Pit Lane</a>
+        <h2>Inventario Global</h2>
+        
+        <table>
+            <tr>
+                <th>Item</th>
+                <th>Stock Actual</th>
+                <th>Modificar Inventario</th>
+            </tr>
+            {% for s in stock %}
+            <tr>
+                <td><strong>{{ s.nombre_legible }}</strong></td>
+                <td class="stock-number">{{ s.cantidad }}</td>
+                <td>
+                    <form method="POST" style="margin: 0; display: flex; align-items: center;">
+                        <input type="hidden" name="item_key" value="{{ s.item_key }}">
+                        <input type="number" name="cantidad" value="" placeholder="Cant." min="1" required>
+                        <button type="submit" name="accion" value="sumar" class="btn-sumar">+ Sumar</button>
+                        <button type="submit" name="accion" value="restar" class="btn-restar">- Restar</button>
+                        <button type="submit" name="accion" value="fijar" class="btn-fijar">Fijar Exacto</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

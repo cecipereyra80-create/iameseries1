@@ -1,0 +1,11 @@
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Pillow
+qrcode==7.4.2
+pandas==2.2.0
+openpyxl==3.1.2
+PyMySQL==1.1.0
+cryptography==42.0.2
+Werkzeug==3.0.1
+gunicorn==21.2.0

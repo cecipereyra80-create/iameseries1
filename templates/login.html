@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Acceso al Sistema</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Racing+Sans+One&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #15151e; color: #fff; font-family: 'Roboto', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background-color: #1e1e28; padding: 40px; border-radius: 8px; border-top: 5px solid #e10600; text-align: center; width: 100%; max-width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { font-family: 'Racing Sans One', cursive; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
+        .logo { max-width: 150px; margin-bottom: 20px; }
+        input { width: 90%; padding: 12px; margin: 10px 0; background-color: #2a2a36; border: 1px solid #333; color: white; border-radius: 4px; font-family: 'Roboto', sans-serif; }
+        input:focus { outline: none; border-color: #e10600; }
+        button { width: 100%; padding: 12px; background-color: #e10600; color: white; border: none; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-radius: 4px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+        button:hover { background-color: #b00500; }
+        .error { color: #ff4c4c; font-weight: bold; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="IAME Logo" class="logo">
+        <h2>Control de Pista</h2>
+        {% if error %} <div class="error">{{ error }}</div> {% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="USUARIO" required>
+            <input type="password" name="password" placeholder="CONTRASEÑA" required>
+            <button type="submit">Iniciar Sesión</button>
+        </form>
+    </div>
+</body>
+</html>
