@@ -52,12 +52,14 @@ def safe_int(val):
     try: return int(val) if val else 0
     except (ValueError, TypeError): return 0
 
-def registrar_movimiento(tipo, item, cantidad, piloto_dni=None, detalle=""):
-    mov = Movimiento(tipo=tipo, usuario=current_user.username, item=item, cantidad=cantidad, piloto_dni=piloto_dni, detalle=detalle)
+def registrar_movimiento(tipo, item, cantidad, kart, detalle=""):
+    # El campo piloto_dni de la DB ahora guarda siempre el N° de Kart para el historial
+    mov = Movimiento(tipo=tipo, usuario=current_user.username, item=item, cantidad=cantidad, piloto_dni=str(kart), detalle=detalle)
     db.session.add(mov)
 
-def get_consumido(piloto_dni, item_key):
-    total = db.session.query(db.func.sum(Movimiento.cantidad)).filter_by(piloto_dni=piloto_dni, item=item_key, tipo='CONSUMO').scalar()
+def get_consumido(numero_kart, item_key):
+    # Consulta de consumos basada en el identificador único: N° de Kart
+    total = db.session.query(db.func.sum(Movimiento.cantidad)).filter_by(piloto_dni=str(numero_kart), item=item_key, tipo='CONSUMO').scalar()
     return total if total else 0
 
 def obtener_items_permitidos(role):
@@ -82,10 +84,10 @@ def inicializar_sistema():
             db.session.add(Stock(item_key=key, nombre_legible=name, cantidad=0))
     db.session.commit()
 
-# --- BLOQUE DE INICIALIZACIÓN (CRÍTICO PARA RENDER) ---
+# --- BLOQUE DE INICIALIZACIÓN ---
 with app.app_context():
-    db.create_all()         # Asegura que las tablas existan
-    inicializar_sistema()   # Asegura que los usuarios y stock existan
+    db.create_all()
+    inicializar_sistema()
 
 # --- DECORADORES ---
 @app.before_request
@@ -129,7 +131,7 @@ def admin_crear():
         nuevo = Piloto(
             numero_piloto=safe_int(request.form['numero']), 
             nombre=request.form['nombre'], 
-            dni=request.form['dni'], 
+            dni=request.form.get('categoria', 'S/C')[:20], # Guardamos categoría en el campo dni
             equipo=request.form.get('equipo', '')
         )
         db.session.add(nuevo)
@@ -146,42 +148,13 @@ def admin_editar(id):
     try:
         p.numero_piloto = safe_int(request.form['numero'])
         p.nombre = request.form['nombre']
-        p.dni = request.form['dni']
+        p.dni = request.form.get('categoria', 'S/C')[:20]
         p.equipo = request.form.get('equipo', '')
         db.session.commit()
         flash("Piloto actualizado con éxito", "success")
     except Exception:
         db.session.rollback()
         flash("Error: El número de piloto ya está en uso.", "danger")
-    return redirect(url_for('admin_home'))
-
-@app.route('/admin/importar', methods=['POST'])
-@login_required
-def admin_importar():
-    if current_user.role != 'admin': return "Acceso Denegado", 403
-    if 'archivo_excel' not in request.files: return redirect(url_for('admin_home'))
-    file = request.files['archivo_excel']
-    if file and file.filename.endswith('.xlsx'):
-        try:
-            diccionario_hojas = pd.read_excel(file, sheet_name=None, engine='openpyxl')
-            importados = 0
-            for nombre_hoja, df in diccionario_hojas.items():
-                df.columns = df.columns.astype(str).str.strip().str.lower() 
-                for index, row in df.iterrows():
-                    col_num = row.get('n de kart', row.get('n_kart', row.get('numero', row.get('kart', 0))))
-                    col_nombre = str(row.get('piloto', row.get('nombre', 'Sin Nombre')))
-                    dni = str(row.get('dni', row.get('documento', '0')))
-                    equipo = str(row.get('equipo', nombre_hoja))
-                    numero = safe_int(col_num)
-                    if numero > 0 and not Piloto.query.filter_by(numero_piloto=numero).first():
-                        nuevo = Piloto(numero_piloto=numero, nombre=col_nombre, dni=dni, equipo=equipo)
-                        db.session.add(nuevo)
-                        importados += 1
-            db.session.commit()
-            flash(f'Éxito: Se importaron {importados} pilotos.', 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error al procesar el Excel: {str(e)}', 'danger')
     return redirect(url_for('admin_home'))
 
 @app.route('/admin/borrar/<int:id>')
@@ -193,6 +166,40 @@ def admin_borrar(id):
     db.session.commit()
     return redirect(url_for('admin_home'))
 
+# --- GESTIÓN DE USUARIOS ---
+@app.route('/admin/usuarios')
+@login_required
+def admin_usuarios():
+    if current_user.role != 'admin': return "Acceso Denegado", 403
+    usuarios = User.query.all()
+    roles_disponibles = ['admin', 'control', 'nafta', 'gomas', 'sensor', 'pista']
+    return render_template('admin_usuarios.html', usuarios=usuarios, roles=roles_disponibles)
+
+@app.route('/admin/usuarios/crear', methods=['POST'])
+@login_required
+def admin_usuarios_crear():
+    if current_user.role != 'admin': return "Acceso Denegado", 403
+    username = request.form['username']
+    password = request.form['password']
+    role = request.form['role']
+    if not User.query.filter_by(username=username).first():
+        db.session.add(User(username=username, password=generate_password_hash(password), role=role))
+        db.session.commit()
+        flash(f"Usuario '{username}' creado con éxito", "success")
+    return redirect(url_for('admin_usuarios'))
+
+@app.route('/admin/usuarios/borrar/<int:id>')
+@login_required
+def admin_usuarios_borrar(id):
+    if current_user.role != 'admin': return "Acceso Denegado", 403
+    u = User.query.get_or_404(id)
+    if u.username != current_user.username:
+        db.session.delete(u)
+        db.session.commit()
+        flash("Usuario eliminado", "success")
+    return redirect(url_for('admin_usuarios'))
+
+# --- STOCK Y CARGA ---
 @app.route('/admin/stock', methods=['GET', 'POST'])
 @login_required
 def admin_stock():
@@ -231,24 +238,26 @@ def admin_procesar_carga(id):
                 actual = getattr(p, key)
                 if modo == 'sumar':
                     setattr(p, key, actual + val)
-                    registrar_movimiento("CARGA_SALDO", key, val, piloto_dni=p.dni)
+                    registrar_movimiento("CARGA_SALDO", key, val, p.numero_piloto)
                 elif modo == 'restar':
                     setattr(p, key, max(0, actual - val))
-                    registrar_movimiento("RESTA_SALDO", key, val, piloto_dni=p.dni)
+                    registrar_movimiento("RESTA_SALDO", key, val, p.numero_piloto)
                 elif modo == 'fijar':
                     if actual != val:
                         setattr(p, key, val)
-                        registrar_movimiento("CORRECCION_SALDO", key, val - actual, piloto_dni=p.dni, detalle=f"Fijado (de {actual} a {val})")
+                        registrar_movimiento("CORRECCION_SALDO", key, val - actual, p.numero_piloto, detalle=f"Fijado (de {actual} a {val})")
         p.derecho_pista = request.form.get('derecho_pista', p.derecho_pista)
         db.session.commit()
         return redirect(url_for('admin_home'))
-    consumos = {key: get_consumido(p.dni, key) for key in ITEMS_CONFIG.keys()}
+    consumos = {key: get_consumido(p.numero_piloto, key) for key in ITEMS_CONFIG.keys()}
     return render_template('admin_carga.html', p=p, items=ITEMS_CONFIG, consumos=consumos, getattr=getattr)
 
-@app.route('/qr/<int:id>')
+# --- QR Y SMART ROUTER BASADO EN KART ---
+@app.route('/qr/<int:numero_kart>')
 @login_required
-def get_qr(id):
-    url = f"https://{DOMINIO_REAL}/smart/{id}"
+def get_qr(numero_kart):
+    # El QR ahora apunta directamente al número de kart
+    url = f"https://{DOMINIO_REAL}/smart/{numero_kart}"
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(url)
     qr.make(fit=True)
@@ -258,12 +267,13 @@ def get_qr(id):
     buf.seek(0)
     return send_file(buf, mimetype='image/png')
 
-@app.route('/smart/<int:id>')
+@app.route('/smart/<int:numero_kart>')
 @login_required
-def smart_router(id):
-    p = Piloto.query.get_or_404(id)
+def smart_router(numero_kart):
+    # Buscamos al piloto por su número único de kart
+    p = Piloto.query.filter_by(numero_piloto=numero_kart).first_or_404()
     role = current_user.role
-    if role == 'admin': return redirect(url_for('admin_procesar_carga', id=id))
+    if role == 'admin': return redirect(url_for('admin_procesar_carga', id=p.id))
     allowed_items = obtener_items_permitidos(role)
     return render_template('stand_view.html', p=p, items=allowed_items, getattr=getattr, user=current_user)
 
@@ -283,62 +293,55 @@ def api_descontar_post(id, item):
     if saldo_piloto > 0 and stk and stk.cantidad > 0:
         setattr(p, item, saldo_piloto - 1)
         stk.cantidad -= 1
-        registrar_movimiento("CONSUMO", item, 1, piloto_dni=p.dni, detalle=f"Retiro en puesto: {current_user.role}")
+        # Registro de consumo asociado al número de kart
+        registrar_movimiento("CONSUMO", item, 1, p.numero_piloto, detalle=f"Retiro en puesto: {current_user.role}")
         db.session.commit()
         flash(f"Retiro exitoso de {ITEMS_CONFIG[item]}", "success")
     else:
         flash("Sin saldo o sin stock disponible", "danger")
-    return redirect(url_for('smart_router', id=id))
+    return redirect(url_for('smart_router', numero_kart=p.numero_piloto))
 
+# --- EXPORTACIÓN CON HORARIO ARGENTINA ---
 @app.route('/admin/exportar')
 @login_required
 def admin_exportar():
     if current_user.role != 'admin': return "Acceso Denegado", 403
-    
-    # 1. Preparar la hoja de Saldos (Resumen de Pilotos)
     pilotos = Piloto.query.all()
     data_saldos = []
     for p in pilotos:
         data_saldos.append({
-            'N_Kart': p.numero_piloto, 'Nombre': p.nombre, 'DNI': p.dni, 'Equipo': p.equipo,
-            'Nafta': p.nafta_20l, 'MG_Rojas': p.neumaticos_mg_rojas, 'MG_Cadete': p.neumaticos_mg_cadete,
+            'N_Kart': p.numero_piloto, 'Nombre': p.nombre, 'Categoría': p.dni, 'Equipo': p.equipo,
+            'Nafta': p.nafta_20l, 'Gomas Rojas': p.neumaticos_mg_rojas, 'Gomas Cadete': p.neumaticos_mg_cadete,
             'Lluvia': p.neumaticos_lluvia, 'Sensor': p.sensor, 'Pista': p.derecho_pista
         })
     df_saldos = pd.DataFrame(data_saldos)
 
-    # 2. Preparar la hoja de Movimientos (Auditoría)
-    # Ordenamos por fecha descendente (los más nuevos primero)
     movimientos = Movimiento.query.order_by(Movimiento.fecha.desc()).all()
     data_movs = []
     for m in movimientos:
+        # Ajuste de horario: UTC a Argentina (UTC-3)
+        fecha_arg = (m.fecha - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M:%S') if m.fecha else ''
         data_movs.append({
-            'Fecha': m.fecha.strftime('%d/%m/%Y %H:%M:%S') if m.fecha else '',
-            'Tipo de Acción': m.tipo,
-            'Usuario (Operario)': m.usuario,
-            'Item': ITEMS_CONFIG.get(m.item, m.item), # Muestra el nombre lindo si existe
+            'Fecha (ARG)': fecha_arg,
+            'Acción': m.tipo,
+            'Usuario': m.usuario,
+            'Item': ITEMS_CONFIG.get(m.item, m.item),
             'Cantidad': m.cantidad,
-            'DNI Piloto': m.piloto_dni or 'N/A',
-            'Detalle Extra': m.detalle or ''
+            'N° Kart': m.piloto_dni or 'N/A',
+            'Detalle': m.detalle or ''
         })
     df_movs = pd.DataFrame(data_movs)
 
-    # 3. Generar el archivo Excel con múltiples hojas
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Guardar la hoja 1
-        df_saldos.to_excel(writer, index=False, sheet_name='Saldos IAME')
-        
-        # Guardar la hoja 2 (si no hay movimientos, creamos una vacía con los títulos)
-        if not df_movs.empty:
-            df_movs.to_excel(writer, index=False, sheet_name='Auditoría Movimientos')
-        else:
-            pd.DataFrame(columns=['Fecha', 'Tipo de Acción', 'Usuario (Operario)', 'Item', 'Cantidad', 'DNI Piloto', 'Detalle Extra']).to_excel(writer, index=False, sheet_name='Auditoría Movimientos')
-            
+        df_saldos.to_excel(writer, index=False, sheet_name='Saldos Actuales')
+        df_movs.to_excel(writer, index=False, sheet_name='Auditoría Movimientos')
     output.seek(0)
     
-    # Descargar con la fecha de hoy en el nombre del archivo
-    nombre_archivo = f"reporte_iame_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    hora_arg = datetime.now() - timedelta(hours=3)
+    nombre_archivo = f"reporte_iame_{hora_arg.strftime('%Y%m%d_%H%M')}.xlsx"
     return send_file(output, download_name=nombre_archivo, as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # host='0.0.0.0' permite acceso desde el celular si estás en la misma red Wi-Fi
+    app.run(host='0.0.0.0', debug=True, port=5000)
