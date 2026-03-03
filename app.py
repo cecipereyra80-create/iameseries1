@@ -7,12 +7,16 @@ from flask import Flask, render_template, request, redirect, url_for, send_file,
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# Importación de modelos (aseguráte que tu archivo se llame models.py)
 from models import db, User, Stock, Piloto, Movimiento
 
 app = Flask(__name__)
+
+# --- CONFIGURACIÓN ---
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'iame_super_secreto_local')
 DOMINIO_REAL = os.environ.get('DOMINIO_REAL', '127.0.0.1:5000')
 
+# Configuración de Base de Datos (Render MySQL vs Local SQLite)
 if os.environ.get("DB_HOST"):
     DB_USER = os.environ.get("DB_USER")
     DB_PASS = os.environ.get("DB_PASS")
@@ -27,20 +31,14 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
 
+# --- INICIALIZACIÓN DE EXTENSIONES ---
 db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-@app.before_request
-def make_session_permanent():
-    session.permanent = True
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
+# --- CONFIGURACIÓN DE ITEMS ---
 ITEMS_CONFIG = {
     'nafta_20l': '⛽ Nafta 20L', 
     'neumaticos_mg_rojas': '🔴 MG Rojas',
@@ -49,6 +47,7 @@ ITEMS_CONFIG = {
     'sensor': '📡 Sensor'
 }
 
+# --- FUNCIONES DE SOPORTE ---
 def safe_int(val):
     try: return int(val) if val else 0
     except (ValueError, TypeError): return 0
@@ -69,6 +68,7 @@ def obtener_items_permitidos(role):
     else: return {}
 
 def inicializar_sistema():
+    """Crea los usuarios base y los items de stock si no existen en la DB."""
     usuarios_base = {
         'admin': 'admin123', 'control': 'control123', 'nafta': 'nafta123', 
         'gomas': 'gomas123', 'pista': 'pista123', 'sensor': 'sensor123'
@@ -82,6 +82,21 @@ def inicializar_sistema():
             db.session.add(Stock(item_key=key, nombre_legible=name, cantidad=0))
     db.session.commit()
 
+# --- BLOQUE DE INICIALIZACIÓN (CRÍTICO PARA RENDER) ---
+with app.app_context():
+    db.create_all()         # Asegura que las tablas existan
+    inicializar_sistema()   # Asegura que los usuarios y stock existan
+
+# --- DECORADORES ---
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# --- RUTAS ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
@@ -145,46 +160,28 @@ def admin_editar(id):
 def admin_importar():
     if current_user.role != 'admin': return "Acceso Denegado", 403
     if 'archivo_excel' not in request.files: return redirect(url_for('admin_home'))
-        
     file = request.files['archivo_excel']
     if file and file.filename.endswith('.xlsx'):
         try:
-            # sheet_name=None obliga a pandas a leer TODAS las pestañas del Excel
             diccionario_hojas = pd.read_excel(file, sheet_name=None, engine='openpyxl')
             importados = 0
-            
-            # Recorremos cada pestaña (ej: CADETE, HONDA, etc.)
             for nombre_hoja, df in diccionario_hojas.items():
-                # Limpiamos los nombres de las columnas para evitar errores por espacios
                 df.columns = df.columns.astype(str).str.strip().str.lower() 
-                
                 for index, row in df.iterrows():
-                    # Buscamos la columna (ahora reconoce 'n de kart')
                     col_num = row.get('n de kart', row.get('n_kart', row.get('numero', row.get('kart', 0))))
-                    
-                    # Buscamos el nombre (ahora reconoce 'piloto')
                     col_nombre = str(row.get('piloto', row.get('nombre', 'Sin Nombre')))
-                    
-                    # DNI por defecto en 0 si no existe en el Excel
                     dni = str(row.get('dni', row.get('documento', '0')))
-                    
-                    # Usamos el nombre de la pestaña como Equipo/Categoría
                     equipo = str(row.get('equipo', nombre_hoja))
-                    
                     numero = safe_int(col_num)
-                    
-                    # Si tiene un número válido y no existe ya en la base, lo creamos
                     if numero > 0 and not Piloto.query.filter_by(numero_piloto=numero).first():
                         nuevo = Piloto(numero_piloto=numero, nombre=col_nombre, dni=dni, equipo=equipo)
                         db.session.add(nuevo)
                         importados += 1
-                        
             db.session.commit()
-            flash(f'Éxito: Se importaron {importados} pilotos de todas las categorías.', 'success')
+            flash(f'Éxito: Se importaron {importados} pilotos.', 'success')
         except Exception as e:
             db.session.rollback()
-            flash(f'Error al procesar el Excel. Detalle técnico: {str(e)}', 'danger')
-            
+            flash(f'Error al procesar el Excel: {str(e)}', 'danger')
     return redirect(url_for('admin_home'))
 
 @app.route('/admin/borrar/<int:id>')
@@ -203,17 +200,15 @@ def admin_stock():
     if request.method == 'POST':
         item = request.form['item_key']
         accion = request.form.get('accion', 'sumar')
-        cant_str = request.form.get('cantidad', '')
-        
-        if cant_str.strip() != "":
-            cant = safe_int(cant_str)
+        cant = safe_int(request.form.get('cantidad', ''))
+        if cant > 0:
             stk = db.session.get(Stock, item)
-            if stk and cant > 0:
+            if stk:
                 if accion == 'sumar':
                     stk.cantidad += cant
                     registrar_movimiento("INGRESO_STOCK", item, cant, detalle="Suma manual")
                 elif accion == 'restar':
-                    stk.cantidad = max(0, stk.cantidad - cant) # Evita que quede en negativo
+                    stk.cantidad = max(0, stk.cantidad - cant)
                     registrar_movimiento("RETIRO_STOCK", item, cant, detalle="Resta manual")
                 elif accion == 'fijar':
                     viejo = stk.cantidad
@@ -231,26 +226,22 @@ def admin_procesar_carga(id):
     if request.method == 'POST':
         modo = request.form.get('modo', 'sumar')
         for key in ITEMS_CONFIG.keys():
-            val_str = request.form.get(key)
-            if val_str and val_str.strip() != "":
-                val = safe_int(val_str)
-                if val > 0:
-                    actual = getattr(p, key)
-                    if modo == 'sumar':
-                        setattr(p, key, actual + val)
-                        registrar_movimiento("CARGA_SALDO", key, val, piloto_dni=p.dni)
-                    elif modo == 'restar':
-                        setattr(p, key, max(0, actual - val))
-                        registrar_movimiento("RESTA_SALDO", key, val, piloto_dni=p.dni)
-                    elif modo == 'fijar':
-                        if actual != val:
-                            setattr(p, key, val)
-                            registrar_movimiento("CORRECCION_SALDO", key, val - actual, piloto_dni=p.dni, detalle=f"Corrección (de {actual} a {val})")
-        
+            val = safe_int(request.form.get(key))
+            if val > 0:
+                actual = getattr(p, key)
+                if modo == 'sumar':
+                    setattr(p, key, actual + val)
+                    registrar_movimiento("CARGA_SALDO", key, val, piloto_dni=p.dni)
+                elif modo == 'restar':
+                    setattr(p, key, max(0, actual - val))
+                    registrar_movimiento("RESTA_SALDO", key, val, piloto_dni=p.dni)
+                elif modo == 'fijar':
+                    if actual != val:
+                        setattr(p, key, val)
+                        registrar_movimiento("CORRECCION_SALDO", key, val - actual, piloto_dni=p.dni, detalle=f"Fijado (de {actual} a {val})")
         p.derecho_pista = request.form.get('derecho_pista', p.derecho_pista)
         db.session.commit()
         return redirect(url_for('admin_home'))
-        
     consumos = {key: get_consumido(p.dni, key) for key in ITEMS_CONFIG.keys()}
     return render_template('admin_carga.html', p=p, items=ITEMS_CONFIG, consumos=consumos, getattr=getattr)
 
@@ -289,7 +280,6 @@ def api_descontar_post(id, item):
     p = Piloto.query.get_or_404(id)
     stk = db.session.get(Stock, item)
     saldo_piloto = getattr(p, item)
-    
     if saldo_piloto > 0 and stk and stk.cantidad > 0:
         setattr(p, item, saldo_piloto - 1)
         stk.cantidad -= 1
@@ -320,7 +310,4 @@ def admin_exportar():
     return send_file(output, download_name=f"reporte_iame_{datetime.now().strftime('%Y%m%d')}.xlsx", as_attachment=True)
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        inicializar_sistema()
     app.run(debug=True, port=5000)
