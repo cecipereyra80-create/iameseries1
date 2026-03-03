@@ -3,7 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administración - IAME</title>
+    <title>Panel Admin - IAME</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .qr-thumb { width: 50px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand">IAME QR - Administrador</span>
+            <div class="d-flex">
+                <a href="{{ url_for('admin_stock') }}" class="btn btn-outline-light me-2">Stock</a>
+                <a href="{{ url_for('admin_usuarios') }}" class="btn btn-warning me-2">Usuarios</a>
+                <a href="{{ url_for('logout') }}" class="btn btn-danger">Salir</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}{% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}{% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Registrar Piloto</h5>
+                <form action="{{ url_for('admin_crear') }}" method="POST" class="row g-2">
+                    <div class="col-md-2"><input type="number" name="numero" class="form-control" placeholder="N° Kart" required></div>
+                    <div class="col-md-4"><input type="text" name="nombre" class="form-control" placeholder="Nombre" required></div>
+                    <div class="col-md-3"><input type="text" name="categoria" class="form-control" placeholder="Categoría" required></div>
+                    <div class="col-md-3"><input type="text" name="equipo" class="form-control" placeholder="Equipo"></div>
+                    <button type="submit" class="btn btn-primary mt-2">Agregar</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Kart</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>QR</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pilotos %}
+                        <tr>
+                            <td><strong>{{ p.numero_piloto }}</strong></td>
+                            <td>{{ p.nombre }}</td>
+                            <td>{{ p.dni }}</td>
+                            <td>
+                                <a href="{{ url_for('get_qr', numero_kart=p.numero_piloto) }}" target="_blank">
+                                    <img src="{{ url_for('get_qr', numero_kart=p.numero_piloto) }}" class="qr-thumb">
+                                </a>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('admin_procesar_carga', id=p.id) }}" class="btn btn-sm btn-success">Saldos</a>
+                                <a href="{{ url_for('admin_borrar', id=p.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('¿Borrar?')">X</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="mt-4 text-center"><a href="{{ url_for('admin_exportar') }}" class="btn btn-secondary">Exportar Excel (Argentina)</a></div>
+    </div>
+</body>
+</html>                <h5 class="card-title">Listado de Pilotos</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th># Kart</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                <th>Equipo</th>
+                                <th>Código QR</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in pilotos %}
+                            <tr>
+                                <td><strong>{{ p.numero_piloto }}</strong></td>
+                                <td>{{ p.nombre }}</td>
+                                <td><span class="badge bg-info text-dark">{{ p.dni }}</span></td>
+                                <td>{{ p.equipo }}</td>
+                                <td>
+                                    <a href="{{ url_for('get_qr', numero_kart=p.numero_piloto) }}" target="_blank">
+                                        <img src="{{ url_for('get_qr', numero_kart=p.numero_piloto) }}" class="qr-thumb" alt="Ver QR">
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('admin_procesar_carga', id=p.id) }}" class="btn btn-sm btn-success">Saldos</a>
+                                    <a href="{{ url_for('admin_borrar', id=p.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Seguro quieres borrarlo?')">Borrar</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center">
+            <a href="{{ url_for('admin_exportar') }}" class="btn btn-secondary shadow-sm">Descargar Reporte Excel (Horario Argentina)</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listado de Pilotos</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th># Kart</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                <th>Equipo</th>
+                                <th>Código QR</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in pilotos %}
+                            <tr>
+                                <td><strong>{{ p.numero_piloto }}</strong></td>
+                                <td>{{ p.nombre }}</td>
+                                <td><span class="badge bg-info text-dark">{{ p.dni }}</span></td>
+                                <td>{{ p.equipo }}</td>
+                                <td>
+                                    <a href="{{ url_for('get_qr', numero_kart=p.numero_piloto) }}" target="_blank">
+                                        <img src="{{ url_for('get_qr', numero_kart=p.numero_piloto) }}" class="qr-thumb" alt="Ver QR">
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('admin_procesar_carga', id=p.id) }}" class="btn btn-sm btn-success">Saldos</a>
+                                    <a href="{{ url_for('admin_borrar', id=p.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Seguro quieres borrarlo?')">Borrar</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center">
+            <a href="{{ url_for('admin_exportar') }}" class="btn btn-secondary shadow-sm">Descargar Reporte Excel (Horario Argentina)</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>>Panel de Administración - IAME</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; }
